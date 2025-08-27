@@ -1300,9 +1300,9 @@ class MMTemplateConfigMixin(TemplateConfigHeuristics):
         Convert config lists to template kwargs.
         This replaces the logic from choices.get_mm_configs and inlines mm_options.
         """
-        assert isinstance(kernel_inputs, MMKernelInputs), (
-            f"{self.__class__.__name__} requires MMKernelInputs"
-        )
+        assert isinstance(
+            kernel_inputs, MMKernelInputs
+        ), f"{self.__class__.__name__} requires MMKernelInputs"
         input_nodes = kernel_inputs.nodes()
         if len(input_nodes) < 2:
             raise ValueError(f"Need at least 2 input tensors, got {len(input_nodes)}")
@@ -1474,9 +1474,9 @@ class ScaledMMConfigMixin(MMTemplateConfigMixin):
         input_nodes = kernel_inputs.nodes()
 
         # Initial assertion from mm_common.scaled_mm_options
-        assert len(input_nodes) >= 4, (
-            f"scaled_mm requires at least 4 inputs, got {len(input_nodes)}"
-        )
+        assert (
+            len(input_nodes) >= 4
+        ), f"scaled_mm requires at least 4 inputs, got {len(input_nodes)}"
 
         # Extract scale tensors (typically scale_a and scale_b are input_nodes[2] and input_nodes[3])
         scale_a = input_nodes[2]
@@ -1529,9 +1529,11 @@ class ScaledTMAConfigMixin(ScaledMMConfigMixin):
 
     def _filter_configs(self, configs: list[BaseConfig]) -> list[BaseConfig]:
         """
-        TMA specific filtering, as num_warps=2 not safe for TMA
+        TMA specific filtering:
+        - num_warps=2 not safe for TMA
+        - block_k >= 32 required for TMA (requires inner-most dimension >= 32)
         """
-        configs = [c for c in configs if c.num_warps != 2]
+        configs = [c for c in configs if c.num_warps != 2 and c.block_k >= 32]
         return super()._filter_configs(configs)
 
     def get_template_configs(
@@ -1603,11 +1605,10 @@ class CUDAScaledMMTemplateConfigHeuristic(ScaledMMConfigMixin, CUDAConfigHeurist
         super().__init__()
         # Override mm_configs to use scaled_mm_configs
         self.mm_configs = self.scaled_mm_configs
-        # NOTE: overriding exhaustive configs here to be the same as mm_configs
-        # as we haven't validated exhaustive support here yet
-        # TODO(coconutruben): remove this once we have validated exhaustive support
-        # for scaled_mm
-        self.exhaustive_configs = self.scaled_mm_configs
+
+    def _filter_configs(self, configs: list[BaseConfig]) -> list[BaseConfig]:
+        configs = [c for c in configs if c.block_k >= 32]
+        return super()._filter_configs(configs)
 
 
 # TODO(coconutruben): replace with template.name once templates are importable
@@ -1621,11 +1622,6 @@ class CUDAScaledTMATemplateConfigHeuristic(ScaledTMAConfigMixin, CUDAConfigHeuri
         super().__init__()
         # Override mm_configs to use scaled_persistent_mm_configs for TMA
         self.mm_configs = self.scaled_persistent_mm_configs
-        # NOTE: overriding exhaustive configs here to be the same as mm_configs
-        # as we haven't validated exhaustive support here yet
-        # TODO(coconutruben): remove this once we have validated exhaustive support
-        # for scaled_mm
-        self.exhaustive_configs = self.scaled_persistent_mm_configs
 
 
 # TODO(coconutruben): replace with template.name once templates are importable
